@@ -11,10 +11,7 @@ import sqlite3
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_TO_SPANISH = {
-    "1080p Balanced": "1080p Balanced - Spanish+Original",
-    "2160p Balanced": "2160p Balanced - Spanish+Original",
-}
+SPANISH_SUFFIX = " - Spanish+Original"
 LANGUAGE_BANS = {"Not Original", "Not Original or English"}
 EXPECTED_SCORES = {
     "ES: Not Spanish": -100_000_000,
@@ -56,7 +53,16 @@ def rows(conn: sqlite3.Connection, table: str, profile_name: str):
 
 
 def compare_inherited(conn, before):
-    for source, target in SOURCE_TO_SPANISH.items():
+    actual_names = {name for (name,) in conn.execute(
+        "SELECT name FROM quality_profiles"
+    )}
+    expected_names = {source + SPANISH_SUFFIX for source in before}
+    assert actual_names == expected_names, (
+        f"Expected Spanish variants for ALL upstream profiles: {actual_names ^ expected_names}"
+    )
+
+    for source in before:
+        target = source + SPANISH_SUFFIX
         assert conn.execute(
             "SELECT 1 FROM quality_profiles WHERE name = ?", (source,)
         ).fetchone() is None, f"Unrenamed profile: {source}"
@@ -214,10 +220,9 @@ def simulated_language_score(conn, profile, title, languages, original):
     return sum(score for score, matches in grouped.values() if all(matches))
 
 
-def test_language_ranking(conn):
-    # The first four represent the user's requested priority for an
-    # originally English-language series. These are illustrative release
-    # titles, not claimed examples observed on DonTorrent/EliteTorrent.
+def test_language_ranking(conn, spanish_profiles):
+    # Illustrative release titles, not claimed examples observed on
+    # DonTorrent/EliteTorrent. The cases also check the requested priority.
     cases = [
         ("likely dual marker", "Show.S01E01.ESP.ENG.DUAL.1080p",
          {"Spanish", "English"}, "English", 3000),
@@ -252,7 +257,7 @@ def test_language_ranking(conn):
         ("spanish-original show still eligible", "Show.S01E01.ESP.1080p",
          {"Spanish"}, "Spanish", 2000),
     ]
-    for profile in SOURCE_TO_SPANISH.values():
+    for profile in spanish_profiles:
         for case, title, languages, original, expected in cases:
             actual = simulated_language_score(
                 conn, profile, title, languages, original
@@ -264,7 +269,7 @@ def test_language_ranking(conn):
     # Preference within a comparable quality tier, not a claim that
     # Sonarr/Radarr will rank across different quality tiers by CF score.
     samples = {
-        name: simulated_language_score(conn, next(iter(SOURCE_TO_SPANISH.values())),
+        name: simulated_language_score(conn, spanish_profiles[0],
                                        title, langs, "English")
         for name, title, langs in [
             ("two", "Show.S01E01.ESP.ENG.DUAL.1080p", {"Spanish", "English"}),
@@ -287,8 +292,19 @@ def main():
 
     apply(conn, Path(schema_ops))
     apply(conn, ROOT / "ops")
+    source_names = sorted(name for (name,) in conn.execute(
+        "SELECT name FROM quality_profiles"
+    ))
+    assert source_names, "Upstream has no quality profiles"
+    assert {"1080p Balanced", "2160p Balanced"}.issubset(source_names), (
+        "Upstream Balanced profiles were renamed or removed"
+    )
+    assert all(not name.endswith(SPANISH_SUFFIX) for name in source_names), (
+        "Upstream already contains Spanish-suffixed names"
+    )
+
     before = {}
-    for source in SOURCE_TO_SPANISH:
+    for source in source_names:
         general = conn.execute(
             """SELECT id, description, upgrades_allowed,
                       upgrade_until_score, upgrade_score_increment
@@ -313,10 +329,10 @@ def main():
     assert conn.execute("SELECT COUNT(*) FROM quality_profiles").fetchone()[0] == count_before
     compare_inherited(conn, before)
     test_conditions(conn)
-    test_language_ranking(conn)
+    test_language_ranking(conn, [name + SPANISH_SUFFIX for name in source_names])
     violations = list(conn.execute("PRAGMA foreign_key_check"))
     assert not violations, f"Foreign-key violations: {violations[:10]}"
-    print("PCD compilation, Spanish variants, and simulated language ranking passed.")
+    print(f"PCD compilation, {len(source_names)} Spanish variants, and simulated ranking passed.")
 
 
 if __name__ == "__main__":
