@@ -1,95 +1,115 @@
 # Spanish+Original Dictionarry profiles
 
-This fork keeps Dictionarry's `v2` operations unchanged and applies all
-Spanish customization in `tweaks/` **after** upstream SQL has been replayed.
-Profilarr uses the order `schema → ops → tweaks → local user ops`.
+This fork keeps Dictionarry's `v2` operations untouched and applies
+Git-tracked Spanish customizations under `tweaks/` after upstream SQL:
+`schema → ops → tweaks → local user ops`.
 
-## Linked databases (one Profilarr instance)
+## Intended use: one Profilarr, two databases
 
-Link both repositories independently and give them different **instance names**:
-
-| Profilarr database instance | Repository | Profiles to sync |
+| Profilarr linked database | Repository | Sync selection |
 | --- | --- | --- |
-| Dictionarry | `Dictionarry-Hub/database` (branch `v2`) | Regular Dictionarry profiles |
-| Dictionarry Spanish | `dgmora/profilarr-database-es` (branch `v2`) | `1080p Balanced - Spanish+Original`, `2160p Balanced - Spanish+Original` |
+| Dictionarry | `Dictionarry-Hub/database` (`v2`) | Regular upstream profiles |
+| Dictionarry Spanish | `dgmora/profilarr-database-es` (`v2`) | Only `1080p Balanced - Spanish+Original` and `2160p Balanced - Spanish+Original` |
 
-The instance name is user-configurable; `pcd.json` can stay identical to
-upstream. Only sync the selected Spanish variants from the fork. Profiles from
-other upstream definitions are still present in its compiled database, but
-aren't intended to be synced from that source.
+Use **different database instance names** in Profilarr. Link the two
+repositories in the same Profilarr installation and sync only their intended
+profiles into Sonarr/Radarr instances. No second Profilarr service is needed.
+`pcd.json` can retain its upstream identity.
 
-The Spanish variants can be synced into Sonarr ES and/or Radarr ES. Regular
-series and movies keep using the ordinary profiles; there is no need for a
-second Profilarr process or persistent Profilarr UI edits. Linking databases
-and selecting sync profiles are one-time Profilarr setup operations, not
-declarative repository changes.
+## Desired audio priorities
 
-## What the tweaks change
+For content whose **original language is not Spanish**, Spanish (Castilian)
+audio is required:
 
-- `tweaks/10.spanish-balanced-profiles.sql` renames the completed upstream
-  `1080p Balanced` and `2160p Balanced` entities. Their associated qualities,
-  groups, tags, and CF scores follow through schema `ON UPDATE CASCADE`.
-  Sets preferred language to `Any` (required for Radarr CF language filtering)
-  and minimum CF score to 0. Removes **scoring assignments**, only for these
-  variants, of the upstream `Not Original` and `Not Original or English`
-  rejection CFs so Spanish-only releases are allowed.
-- `tweaks/20.spanish-audio-scoring.sql` adds three Spanish-scoped CFs and
-  assigns them only to the Spanish variants, for Sonarr and Radarr.
+1. **Best:** Spanish + original, and no other audio languages.
+2. **Next:** Spanish + original + one or more additional audio languages.
+3. **Fallback:** Spanish only, or Spanish plus other *non-original* languages.
+4. **Reject:** No Spanish audio.
 
-| Detected languages/title | Language CF contribution |
+For originally Spanish content, Spanish-only should still be eligible. These
+preferences are **within comparable quality tiers**, since Sonarr/Radarr
+compare qualities before Custom Format scores. They do not change search
+queries (including Spanish/English alternate series titles).
+
+## Implementation
+
+- `tweaks/10.spanish-balanced-profiles.sql` renames the completed
+  `1080p Balanced` and `2160p Balanced` profiles; schema foreign keys
+  with `ON UPDATE CASCADE` preserve inherited qualities, group ordering,
+  tags, and other Custom Format scores. It sets language to `Any` and
+  minimum Custom Format score to 0.
+- Remove scoring assignments of upstream `Not Original` and
+  `Not Original or English` only from the two Spanish variants. Those
+  existing rejections would incorrectly ban Spanish-only releases.
+- `tweaks/20.spanish-audio-scoring.sql` adds Spanish-prefixed CFs for
+  Sonarr and Radarr (`arr_type = 'all'`), following TRaSH's pattern of
+  checking **Original + target language** rather than English or title
+  markers alone.
+
+| When Spanish is identified | Spanish-language CF score |
 | --- | ---: |
-| Original + Spanish with explicit DUAL marker | +3000 |
-| Original + Spanish without DUAL marker | +2000 |
-| Spanish alone, or Spanish with other non-original languages | 0 |
-| Spanish not identified | -100000000 (reject at min score 0) |
+| Original + Spanish, DUAL or an explicitly named two-language pair, no advertised third language | +3000 |
+| Original + Spanish, number of languages uncertain | +2000 |
+| Original + Spanish, explicit list including a third language | +1500 |
+| Spanish without identified Original | 0 |
+| Spanish not identified | -100000000; below minimum, reject |
 
-The two positive bonuses are additive (+2000 and +1000). They are intentionally
-small relative to Dictionarry's quality CFs, so quality tiers and
-`upgrade_until_score` retain their general behavior. Thus these are
-preferences *within* upstream quality scoring, not a guarantee that any
-dual-audio release outranks every higher-quality Spanish-only release.
+Scoring is additive: `Original + Spanish` (+2000), `Likely two languages`
+(+1000), `Explicit 3+ languages` (-500), and `Not Spanish` (-100000000).
+The 3+-language evidence **suppresses** the likely-two bonus even if `DUAL`
+is also present. A bare `MULTi` is *not* evidence of three languages:
+it can mean two or more.
 
-`Spanish` means the parser's standard Spanish language; `Spanish (Latino)`
-is a distinct value and **does not count**. This is aimed at Castilian-dubbed
-releases from DonTorrent, EliteTorrent, and other indexers.
+### Limits / conscious approximations
 
-**Limitations:**
+- Sonarr/Radarr language conditions test *membership*, not an exact audio
+  track count. A DUAL marker or an explicit Spanish/original pair is a
+  **heuristic** for two tracks; an unadvertised third track may exist.
+- Explicit 3+-language matching covers contiguous language-label lists
+  (for example `ENG.ESP.FRA`), not every possible group or tracker
+  convention; three tracks may be present without being advertised.
+  Conversely, some tokens may describe subtitles rather than audio.
+- Parsed release languages depend on titles, indexer-provided metadata,
+  and per-indexer settings. Spanish-language indexers often use translated
+  series names or omit explicit audio-language tags: without identifiable
+  Spanish audio, the profile rejects the release even if it really is dubbed.
+  An indexer-specific `MULTi` assumption may help **if validated for that
+  indexer**, but the SQL doesn't add such an assumption automatically.
+- The `Original` language condition resolves from the media's original
+  language where supported. On originally Spanish titles it can match
+  Spanish-only audio, so the `Original + Spanish` bonus does *not*
+  guarantee two distinct tracks.
+- `Spanish` uses the standard Castilian language enum; `Spanish (Latino)`
+  is a separate value. Naming and parsing can still be ambiguous.
+- Retained Dictionarry quality groups, scores, and upgrade thresholds
+  continue to affect ranking. A preferred language combination cannot
+  guarantee victory over a different, higher-ranked quality tier.
+- This SQL affects scoring/selection, **not Sonarr's search terms**
+  (for example translated series titles versus their original titles).
 
-- A DUAL marker isn't proof of exactly two audio tracks; a release with three
-  languages and DUAL in its name may receive the highest bonus, while a
-  real two-track release without the word DUAL gets the second tier.
-- Language conditions depend on Sonarr/Radarr's release-name parsing and
-  indexer metadata. Releases without an *identified* Spanish audio track are
-  rejected even when the file might contain one. A subtitle-only VOSE release
-  must not count as Spanish audio.
-- Original-language detection depends on the series/movie metadata. For
-  originally Spanish-language titles, "Original + Spanish" may not mean two
-  distinct tracks; the preferences are primarily designed for non-Spanish
-  originals.
-- These CFs affect **ranking/filtering only**, not Sonarr's English-title
-  searches (for example `Slow Horses` vs `Caballos Lentos`).
-- Dictionarry's separate banned-release-group / quality rules remain intact.
+Relevant TRaSH precedents:
+[German DL](https://github.com/TRaSH-Guides/Guides/blob/master/docs/json/sonarr/cf/german-dl.json),
+[Original + French](https://github.com/TRaSH-Guides/Guides/blob/master/docs/json/sonarr/cf/language-original-plus-french.json),
+and [MULTi](https://github.com/TRaSH-Guides/Guides/blob/master/docs/json/sonarr/cf/multi.json).
 
-## Updating from upstream
+## Updating from Dictionarry
 
-Track `Dictionarry-Hub/database` as an upstream Git remote and merge/rebase
-its `v2` branch into this fork's `v2`. Only the `tweaks/` files and these
-fork-local checks/docs diverge, so upstream `ops/` changes normally merge
-without conflict. The next PCD compile rebuilds the **latest upstream**
-profiles before applying these Spanish tweaks.
+Merge/rebase `Dictionarry-Hub/database` `v2` into this fork's `v2`;
+the fork's customizations live only in `tweaks/` and fork-local
+documentation/checks, so upstream `ops/` updates normally merge without
+conflict. Profilarr compiles the latest upstream profiles *before*
+applying the language tweaks. A renamed/removed upstream source profile
+should fail validation rather than silently produce a broken variant.
 
-The GitHub workflow replays the schema, all upstream operations, and our tweaks
-in SQLite, checking that the profile inheritance and language CFs still work.
-If upstream renames/removes a source profile or changes its schema incompatibly,
-the check fails rather than silently losing Spanish variants.
+CI replays the schema, upstream SQL, and tweaks in SQLite, verifies inherited
+relations and FK integrity, and **simulates CF conditions** on an illustrative
+release-name matrix. These tests do **not** call Sonarr/Radarr parsers or
+prove track counts. Follow-up validation should inspect actual releases
+from DonTorrent/EliteTorrent in Sonarr/Radarr Interactive Search.
 
-Run the same check locally (with a compatible version of the schema checkout):
+Run locally with the matching schema dependency:
 
 ```sh
 git clone --depth 1 --branch 1.1.0 https://github.com/Dictionarry-Hub/schema.git /tmp/dictionarry-pcd-schema
 PCD_SCHEMA_DIR=/tmp/dictionarry-pcd-schema/ops python3 tests/validate_database.py
 ```
-
-For later profile types, add new profile rename mappings in tweak 10 and
-include their new names in tweak 20's scoring assignment. Validate the
-parent profile's existing language bans before extending.
