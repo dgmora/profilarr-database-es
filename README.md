@@ -1,32 +1,31 @@
 # Dictionarry Database — Spanish Profiles
 
-An **unofficial fork** of the [Dictionarry database](https://github.com/Dictionarry-Hub/database) for [Profilarr](https://github.com/Dictionarry-Hub/profilarr). It adds Spanish (Castilian) audio preferences to Dictionarry's Balanced quality profiles while retaining upstream quality settings and updates.
+An **unofficial fork** of the [Dictionarry database](https://github.com/Dictionarry-Hub/database) for [Profilarr](https://github.com/Dictionarry-Hub/profilarr). It provides Spanish (Castilian) audio preferences for **every upstream quality profile**, while retaining Dictionarry's quality settings.
 
 ## Profiles
 
-- `1080p Balanced - Spanish+Original`
-- `2160p Balanced - Spanish+Original`
+Each upstream profile is available with the suffix `- Spanish+Original`, for example `1080p Balanced - Spanish+Original` and `2160p Remux - Spanish+Original`. New upstream profiles receive the same treatment when the fork is updated.
 
-Both require **Spanish audio** and, for non-Spanish originals, prefer releases in this order:
+All Spanish variants require detectable **Spanish audio** and prefer, for non-Spanish originals:
 
-1. **Original + Spanish only** (two audio languages).
-2. **Original + Spanish + other languages** (three or more).
-3. **Spanish only**, or Spanish with other languages but not the original.
-4. **No Spanish:** reject.
+1. Original + Spanish only (likely two languages).
+2. Original + Spanish + additional languages.
+3. Spanish without the original audio.
+4. No Spanish: reject.
 
-Release names and indexer metadata cannot always prove the number of audio tracks. The profiles use language detection plus naming hints to approximate the two-versus-three preference; `MULTi` alone does not imply three or more languages. Preferences are scored within comparable quality tiers.
+Audio-track counts are inferred from release names, not verified before download. Preferences are soft scores alongside upstream quality scoring.
 
 ## Using the database
 
-Keep **one Profilarr instance** and link **two databases**:
+Use **one Profilarr instance** with two linked databases:
 
-- [Official Dictionarry](https://github.com/Dictionarry-Hub/database) for your regular profiles.
-- This fork for the two Spanish profiles above.
+- [Official Dictionarry](https://github.com/Dictionarry-Hub/database) for regular profiles.
+- This fork for Spanish variants.
 
-Selectively sync the Spanish profiles to your Sonarr/Radarr instance(s). The fork inherits upstream profile definitions from `ops/` and applies its changes in `tweaks/`, so updates from Dictionarry can be merged without maintaining copied profiles by hand.
+Select the desired profiles from each database for your Sonarr/Radarr instances. Upstream changes are incorporated by updating the fork from Dictionarry; no manual edits to the Spanish profiles are needed.
 
-See [SPANISH.md](SPANISH.md) for implementation details, limitations and maintenance instructions.
+See [SPANISH.md](SPANISH.md) for synchronization priority, limitations, and maintenance.
 
 ## Credits
 
-Based on the [Dictionarry database](https://github.com/Dictionarry-Hub/database). For upstream profiles and general Profilarr support, see the [Dictionarry documentation](https://dictionarry.dev) and [Dictionarry Discord](https://discord.com/invite/Y9TYP6jeYZ).
+Based on the [Dictionarry database](https://github.com/Dictionarry-Hub/database). For upstream profiles and Profilarr support, see the [Dictionarry documentation](https://dictionarry.dev) and [Dictionarry Discord](https://discord.com/invite/Y9TYP6jeYZ).
