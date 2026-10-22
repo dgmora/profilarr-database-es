@@ -70,7 +70,4 @@ CROSS JOIN (
   UNION ALL SELECT 'ES: Likely two languages', 1000
   UNION ALL SELECT 'ES: Explicit 3+ languages', -500
 ) AS cf
-WHERE qp.name IN (
-  '1080p Balanced - Spanish+Original',
-  '2160p Balanced - Spanish+Original'
-);
+;
