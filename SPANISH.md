@@ -14,7 +14,11 @@ Git-tracked Spanish customizations under `tweaks/` after upstream SQL:
 Use **different database instance names** in Profilarr. Link the two
 repositories in the same Profilarr installation and sync only their intended
 profiles into Sonarr/Radarr instances. No second Profilarr service is needed.
-`pcd.json` can retain its upstream identity.
+
+For each Arr instance, put the **official Dictionarry database above the fork**
+in Profilarr's Quality Profiles sync priority. The higher-priority database
+syncs last and wins for shared Custom Format names. The fork's unique `ES:`
+formats remain available.
 
 ## Desired audio priorities
 
