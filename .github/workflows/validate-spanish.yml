@@ -1,0 +1,22 @@
+name: Validate Spanish PCD
+
+on:
+  pull_request:
+  push:
+    branches: [v2]
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch matching schema version
+        run: |
+          SCHEMA_REF="$(python3 -c 'import json; print(json.load(open("pcd.json"))["dependencies"]["https://github.com/Dictionarry-Hub/schema"])')"
+          git clone --depth 1 --branch "$SCHEMA_REF" https://github.com/Dictionarry-Hub/schema.git /tmp/dictionarry-schema
+      - name: Compile PCD and verify Spanish variants
+        run: |
+          PCD_SCHEMA_DIR=/tmp/dictionarry-schema/ops python3 tests/validate_database.py
