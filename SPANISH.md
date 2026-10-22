@@ -9,7 +9,7 @@ Git-tracked Spanish customizations under `tweaks/` after upstream SQL:
 | Profilarr linked database | Repository | Sync selection |
 | --- | --- | --- |
 | Dictionarry | `Dictionarry-Hub/database` (`v2`) | Regular upstream profiles |
-| Dictionarry Spanish | `dgmora/profilarr-database-es` (`v2`) | Only `1080p Balanced - Spanish+Original` and `2160p Balanced - Spanish+Original` |
+| Dictionarry Spanish | `dgmora/profilarr-database-es` (`v2`) | Whichever Spanish variants you want to sync |
 
 Use **different database instance names** in Profilarr. Link the two
 repositories in the same Profilarr installation and sync only their intended
@@ -37,14 +37,14 @@ queries (including Spanish/English alternate series titles).
 
 ## Implementation
 
-- `tweaks/10.spanish-balanced-profiles.sql` renames the completed
-  `1080p Balanced` and `2160p Balanced` profiles; schema foreign keys
-  with `ON UPDATE CASCADE` preserve inherited qualities, group ordering,
-  tags, and other Custom Format scores. It sets language to `Any` and
-  minimum Custom Format score to 0.
-- Remove scoring assignments of upstream `Not Original` and
-  `Not Original or English` only from the two Spanish variants. Those
-  existing rejections would incorrectly ban Spanish-only releases.
+- `tweaks/10.spanish-profiles.sql` gives **every upstream quality profile**
+  a ` - Spanish+Original` suffix. Schema foreign keys with `ON UPDATE
+  CASCADE` retain inherited qualities, group ordering, tags, and other
+  Custom Format scores. It sets language to `Any` and minimum Custom
+  Format score to 0 for all variants.
+- Remove inherited `Not Original` and `Not Original or English` score
+  assignments from all Spanish variants. Those rejections would incorrectly
+  exclude valid Spanish-only releases.
 - `tweaks/20.spanish-audio-scoring.sql` adds Spanish-prefixed CFs for
   Sonarr and Radarr (`arr_type = 'all'`), following TRaSH's pattern of
   checking **Original + target language** rather than English or title
@@ -101,9 +101,11 @@ and [MULTi](https://github.com/TRaSH-Guides/Guides/blob/master/docs/json/sonarr/
 Merge/rebase `Dictionarry-Hub/database` `v2` into this fork's `v2`;
 the fork's customizations live only in `tweaks/` and fork-local
 documentation/checks, so upstream `ops/` updates normally merge without
-conflict. Profilarr compiles the latest upstream profiles *before*
-applying the language tweaks. A renamed/removed upstream source profile
-should fail validation rather than silently produce a broken variant.
+conflict. Profilarr compiles the current upstream profiles *before*
+applying the language tweaks. Newly added profiles receive Spanish variants
+automatically. Validation checks that every current upstream profile is
+converted and that the two original Balanced profiles still exist; other
+upstream removals or renames are not specifically detected.
 
 CI replays the schema, upstream SQL, and tweaks in SQLite, verifies inherited
 relations and FK integrity, and **simulates CF conditions** on an illustrative
